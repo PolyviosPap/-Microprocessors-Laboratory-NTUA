@@ -1,0 +1,75 @@
+START:
+	IN 10H		;Allow ram write.
+	LXI B,00C8H	;Set BC parameters for DELB routine.
+	MVI A,10H	;Code for null 7-segment display.
+	STA 0BF0H	;Null all the 7-segments display except the MSB 7-segment
+	STA 0BF1H
+	STA 0BF2H
+	STA 0BF3H
+	STA 0BF4H
+	
+	MVI A,00H	;A will be used as a counter for the main functionality.
+	STA 0AFFH	;Initialize MSB 7-segment to 0.
+	MVI L,00H	;L will be a flag for enable or disable interrupts.Solution for TSIK bug.
+	
+	MVI A,0DH	;Code for RST6.5 interrupts.
+	SIM		;Set code for RST6.5 interrupts.
+COUNT1:
+	MVI A,0FH	
+COUNT:
+	CALL CHECK_MSB
+	PUSH PSW	;Push A-F to stack so we dont lose its value.
+	LDA 0AFFH	;Memory address 0AFFH acts as a counter to the interrupts given. 
+	STA 0BF5H	;Give this number to MSB 7-segment(needs DCD).
+	CALL DCD	;Display all 0BF5H-0BF0H values to the 7-segments.
+	POP PSW	;Pop A-F and continue counting.
+	ORI F0H
+	CALL DELB
+	STA 3000H
+	ANI 0FH
+	CPI 00H
+	JC COUNT1	;We made a full count 0->15,now start over.
+	DCR A
+	JMP COUNT
+
+CHECK_MSB:		;Based on MSB value disable or enable the interrupts.
+	PUSH PSW
+	LDA 2000H
+	ANI 80H
+	CPI 80H
+	CNZ DISABLE 
+	CZ ENABLE
+	POP PSW
+	RET
+
+ENABLE:		;Enable interrupts.
+	EI
+	MVI L,01H	
+	RET
+	
+DISABLE:		;Disable interrupts
+	DI
+	MVI L,00H 	
+	RET
+
+INTR_ROUTINE:
+	PUSH PSW	;Push A-F because we dont want to lose value,interrupts can happen anytime.
+	MOV A,L	;Check if interrupts were enabled or disabled.
+	CPI 00H	;If they were disabled then do nothing.
+	JZ INTR_ROUTINE_END	
+INTR_ROUTINE_2:
+	RIM
+	ANI 08H
+	EI
+	CPI 08H
+	JZ INTR_ROUTINE_2
+	LDA 0AFFH	;Load number of interrupts.
+	INR A		;Increase them by 1.
+	ANI 0FH	;Modulo 16
+	STA 0AFFH	;Store counter modulo 16 in memory.
+	EI
+INTR_ROUTINE_END:	
+	POP PSW	
+	RET
+		
+END

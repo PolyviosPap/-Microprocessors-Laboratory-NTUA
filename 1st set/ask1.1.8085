@@ -1,0 +1,73 @@
+START:
+	
+	MVI C,E8H		;BC registers are parameters for DELB,1 sec = 1000 ms, so BC is 03E8H.    
+	MVI B,03H
+	MVI H,00H		;Register H will hold the current number of the count.
+	MVI L,01H		;Register L will hold our direction.0 for down,1 for up.
+	LDA 2000H		;Read DIP switches input and save it to A.
+	ANI 0FH		;Logical AND between A and (00001111).A is now having the upper limit.
+	MOV E,A		;Save upper limit to E register.
+	CPI 00H		;Check if we have 0000 as input on the 4 LSBs then we dont count.
+	JZ INPUT_0000
+	JMP CHECK_MSB
+	
+CHECK_MSB:
+	LDA 2000H		;Read DIP switches input and save it to A(we only care about MSB here).
+	ANI 80H		;Logical AND between A and (10000000).
+	CPI 80H		;Check if MSB is 1 or not. 
+	JZ COUNT		;If MSB is 1,go to COUNT.	
+	JMP CHECK_MSB		;Else loop until MSB is 1.
+
+COUNT:
+	MOV A,H		;Bring current number to check for our direction.
+	CMP E			;
+	JZ DIRECTION_DOWN	;If current number is equal to upper limit then change direction to down.
+	CPI 00H		
+	JZ DIRECTION_UP	;If current number is equal to 0 then change direction to up.
+	JMP COUNT_2		;Else keep the same direction and continue counting..
+	
+COUNT_2:
+	MOV A,L		
+	CPI 01H		;Based on our direction we increase or decrease the current number.
+	MOV A,H
+	JZ INCREASE		;If direction is up we increase the current number.
+	JNZ DECREASE		;If direction is down we decrease the current number.
+
+COUNT_3:
+	MOV H,A
+	CALL OUTPUT		
+	JMP CHECK_MSB	
+
+INCREASE:
+	INR A			;Increase by 1 our current number.
+	JMP COUNT_3
+	
+DECREASE:
+	DCR A			;Decrease by 1 our current number.
+	MOV H,A
+	CPI 00H		;If by counting down we reach 0 then we display 0 and get another input from the 4 LSBs.
+	CZ OUTPUT	
+	JZ START		
+	MOV A,H
+	JMP COUNT_3
+
+DIRECTION_UP:
+	MVI L,01H		;Our direction is now up.	
+	JMP COUNT_2
+
+DIRECTION_DOWN:
+	MVI L,00H		;Our direction is now down.
+	JMP COUNT_2
+
+INPUT_0000:
+	CALL OUTPUT
+       JMP START
+
+OUTPUT:
+	CALL DELB  		;Delay leds for 1 sec.
+	MOV A,H
+	CMA
+	STA 3000H  		;Display current number to the Leds.
+	CMA
+	RET
+END

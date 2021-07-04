@@ -1,0 +1,54 @@
+START:
+	CALL KIND		;Read hex number from pad.
+	MOV B,A		;Store X number in register B.
+	CALL KIND		;Read hex number from pad
+	MOV C,A		;Store Y number in register C.
+	MOV A,B		;Now register A hold the X number.
+				;Because largest input from the pad is 00001111 Binary.
+				;Biggest number that can be produced is 16*15+15 = 255 Decimal / 11111111 Binary.
+				;So we have no overflows and one 8-bit register is enough to keep the result,.
+	RAL			;The 4 RAL commands will be like shift left logical.
+	RAL			;And 4 shift left logical commands is multiplication with 16(2*2*2*2).
+	RAL			
+	RAL 			;Now register A is 16*X .
+	ADD C			;Adding Y to 16*X,now register A is equal to 16*X+Y which is the result we want.			
+	
+	CALL BIN_BCD		;Calling a routine that converts a number(register A) from binary to BCD.
+				;1st digit in register B,2nd digit in register C,3rd digit in register D
+	MOV A,D
+	STA 0BF0H
+	MOV A,C
+	STA 0BF1H
+	MOV A,B		
+	STA 0BF2H		;Third place in 7 segment display will have 0. 			
+	MVI A,10H		;Now will null all the other places in the 7-segment display.
+	STA 0BF3H
+	STA 0BF4H
+	STA 0BF5H
+	CALL DCD		;Display the stored ram values 0BF0-0BF5 to 7-segment displays.
+	JMP START
+
+BIN_BCD:			;Based on the flowchart in MLAB_8085-80x86.
+	MVI H,00H
+	MOV L,A	
+	CPI 0AH
+	CNC DIVISION_10
+	MOV D,L
+	MOV A,H
+	MVI H,00H
+	MOV L,A	
+	CPI 0AH
+	CNC DIVISION_10
+	MOV C,L
+	MOV B,H
+	RET
+
+DIVISION_10:
+	INR H			;H will store the quotient of the division with 10.
+	SUI 0AH
+	CPI 0AH
+	JNC DIVISION_10
+	MOV L,A		;L will store the remainder of the division with 10.
+	RET
+	
+END 

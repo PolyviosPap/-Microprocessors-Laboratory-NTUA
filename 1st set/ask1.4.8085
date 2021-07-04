@@ -1,0 +1,103 @@
+START:	
+	MVI D,00H		;Register L will be used as flag which shows if RST6.5 interrupts are enabled or not. 
+				;1 for enabled,0 for disabled.
+				;This flag is needed because there is a bug in the simulator.
+	MVI H,01H		;Register H will hold the position of the train.
+	MVI L,01H		;Register L will hold the direction of the train.
+				;Left is 1,Right is 0.
+	LXI B,01F4H		;Setting parameters BC for DELB routine.
+	MVI A,0DH		;Value for RST6.5 interrupts
+	SIM			;Set this value to interrupt mask
+	
+	MOV A,H		;Set the train at the LSB.
+	CALL OUTPUT
+
+CHECK_MSB:
+	LDA 2000H		;Read DIP switches input.
+	ANI 80H		;Logical AND between A and (10000000).
+	CPI 80H		;Check if MSB is 1 or not.
+	CZ ENABLE		;If MSB is 1 then enable interrupts RST6.5.
+	CNZ DISABLE		;If MSB is 0 then disable interrupts RST6.5.  
+	JNZ CHECK_MSB		;And loop until MSB is 1.
+	MOV A,L
+	CPI 01H		;Check direction and move accordingly.
+	MOV A,H
+	JZ MOVE_TRAIN_LEFT	
+	JNZ MOVE_TRAIN_RIGHT
+
+ENABLE:
+	EI			;Enable RST 6.5 interrupts.
+	MVI D,01H		;Set flag.
+	RET
+	
+DISABLE:
+	DI			;Disable RST 6.5 interrupts.
+	MVI D,00H		;Set flag.
+	RET
+	
+MOVE_TRAIN_LEFT:
+	CPI 80H
+	CZ OUTPUT
+	JZ DIRECTION_RIGHT	;If we are moving left and we are at MSB then move right.
+	RLC
+	MOV H,A
+	CALL OUTPUT
+	JMP CHECK_MSB
+
+MOVE_TRAIN_RIGHT:
+	CPI 01H
+	CZ OUTPUT
+	JZ DIRECTION_LEFT	;If we are moving right and we are at LSB then move left.
+	RRC
+	MOV H,A
+	CALL OUTPUT
+	JMP CHECK_MSB
+
+DIRECTION_RIGHT:
+	MVI L,00H
+	JMP CHECK_MSB
+
+DIRECTION_LEFT:
+	MVI L,01H
+	JMP CHECK_MSB
+
+CHANGE_DIRECTION:
+	MOV A,L
+	CPI 00H
+	JZ LEFT
+	JNZ RIGHT
+LEFT:
+	MVI L,01H
+	RET
+RIGHT:
+	MVI L,00H
+	RET
+	
+
+INTR_ROUTINE:
+	PUSH PSW		;Protecting the values of A-F from interrupts by pushing to stack.
+	MOV A,D		;Based on the flag D we run or we skip the interrupt routine.
+	CPI 00H
+	JZ INTR_ROUTINE_END
+INTR_ROUTINE_2:
+	RIM
+	ANI 08H
+	EI
+	CPI 08H
+	JZ INTR_ROUTINE_2
+	MOV A,L
+	CALL CHANGE_DIRECTION
+	EI
+	INTR_ROUTINE_END:
+	POP PSW		;Pop A-F from stack.
+	RET
+
+
+OUTPUT:
+	CMA
+	CALL DELB
+	STA 3000H
+	CMA
+	RET
+
+END
